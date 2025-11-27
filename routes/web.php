@@ -1,26 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DashboardController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "web" middleware group. Make something great!
-|
-*/
-
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [DashboardController::class, 'index'])->name('dashboard'); // Gambar 1
+Route::get('/active-visitors', [DashboardController::class, 'active'])->name('visitors.active'); // Gambar 2
+Route::get('/logs', [DashboardController::class, 'logs'])->name('visitors.logs'); // Gambar 3
 
 Route::get('/1', function () {
-    return view('pencatatan');
-});
-
-Route::get('/2', function () {
-    return view('log-kunjungan');
+    return view('gate-monitor');
 });
