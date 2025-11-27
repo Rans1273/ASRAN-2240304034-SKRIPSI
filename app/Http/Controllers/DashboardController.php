@@ -79,21 +79,27 @@ class DashboardController extends Controller
         return view('active', compact('activeVisitors'));
     }
 
-    public function logs()
+    public function logs(Request $request)
     {
-        // Rekapitulasi per hari
-        $logs = VisitLog::select(
-                DB::raw('DATE(waktu_masuk) as date'), 
-                DB::raw('count(*) as total')
-            )
-            ->groupBy('date')
-            ->orderBy('date', 'desc')
-            ->paginate(10);
+        // Ambil semua data log, urutkan dari yang terbaru
+        $query = VisitLog::with('member')->orderBy('waktu_masuk', 'desc');
 
-        // Untuk detail per baris (jumlah mhs vs dosen per tanggal), 
-        // bisa dilakukan query tambahan di dalam view atau service terpisah.
-        // Cara sederhana: loop di view dan query count (kurang optimal tapi mudah dipahami pemula)
-        
-        return view('logs', compact('logs'));
+        // Filter Tanggal (Jika user memilih range tanggal)
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->whereBetween('waktu_masuk', [
+                $request->start_date . ' 00:00:00', 
+                $request->end_date . ' 23:59:59'
+            ]);
+        }
+
+        $visits = $query->get();
+
+        // KELOMPOKKAN DATA BERDASARKAN TANGGAL
+        // Hasilnya: ['2025-04-25' => [data_log_1, data_log_2], '2025-04-26' => [...]]
+        $groupedLogs = $visits->groupBy(function($date) {
+            return \Carbon\Carbon::parse($date->waktu_masuk)->format('Y-m-d');
+        });
+
+        return view('logs', compact('groupedLogs'));
     }
 }

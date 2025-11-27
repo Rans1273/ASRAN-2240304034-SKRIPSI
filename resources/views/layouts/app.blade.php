@@ -32,6 +32,7 @@
                     <a href="{{ route('dashboard') }}" class="px-4 py-2 text-sm {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-600 font-medium' : 'bg-white text-gray-600' }}">Ringkas</a>
                     <a href="{{ route('visitors.active') }}" class="px-4 py-2 text-sm border-l {{ request()->routeIs('visitors.active') ? 'bg-blue-50 text-blue-600 font-medium' : 'bg-white text-gray-600' }}">Aktif</a>
                     <a href="{{ route('visitors.logs') }}" class="px-4 py-2 text-sm border-l {{ request()->routeIs('visitors.logs') ? 'bg-blue-50 text-blue-600 font-medium' : 'bg-white text-gray-600' }}">Log</a>
+                    <a href="{{ route('members.index') }}" class="px-4 py-2 text-sm border-l {{ request()->routeIs('members.*') ? 'bg-blue-50 text-blue-600 font-medium' : 'bg-white text-gray-600' }}">Member</a>
                 </div>
             </div>
         </div>

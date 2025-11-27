@@ -6,27 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
-    // database/migrations/xxxx_create_visit_logs_table.php
     public function up()
     {
         Schema::create('visit_logs', function (Blueprint $table) {
-            $table->id();
-            // Relasi ke tabel members
+            $table->id(); // Atribut ID
+            
+            // Relasi ke tabel members (untuk ambil Nama, NIM/NIP, Kategori, Fakultas, Jurusan)
             $table->foreignId('member_id')->constrained('members')->onDelete('cascade');
             
-            $table->dateTime('waktu_masuk'); // Menyimpan Tanggal + Jam + Menit
-            $table->dateTime('waktu_keluar')->nullable(); // Jika NULL berarti sedang aktif
+            // Menyimpan Tanggal & Jam sekaligus
+            $table->dateTime('waktu_masuk'); 
+            $table->dateTime('waktu_keluar')->nullable(); // Null = Belum keluar
             
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('visit_logs');
