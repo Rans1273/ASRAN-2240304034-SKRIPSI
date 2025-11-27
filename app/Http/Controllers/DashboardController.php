@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\VisitLog;
 use App\Models\Member;
+use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\VisitLogsExport;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class DashboardController extends Controller
 {
@@ -14,7 +17,7 @@ class DashboardController extends Controller
     {
         $today = Carbon::today();
 
-        // 1. KARTU STATISTIK
+        // 1. KARTU STATISTIK UTAMA
         $todayCount = VisitLog::whereDate('waktu_masuk', $today)->count();
         $yesterdayCount = VisitLog::whereDate('waktu_masuk', Carbon::yesterday())->count();
         
@@ -26,35 +29,36 @@ class DashboardController extends Controller
         $monthCount = VisitLog::whereMonth('waktu_masuk', Carbon::now()->month)->count();
 
         // 2. GRAFIK 7 HARI TERAKHIR (Line Chart)
-        // Mengambil data 7 hari terakhir dan dikelompokkan per tanggal
         $chartData = VisitLog::select(DB::raw('DATE(waktu_masuk) as date'), DB::raw('count(*) as total'))
             ->where('waktu_masuk', '>=', Carbon::now()->subDays(6))
             ->groupBy('date')
             ->get()
             ->pluck('total', 'date');
 
-        // Normalisasi data grafik (agar tanggal yang kosong tetap muncul nilai 0)
+        // Normalisasi data grafik
         $labels = [];
         $dataVisits = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i)->format('Y-m-d');
-            $labels[] = Carbon::now()->subDays($i)->format('d M'); // Label: 30 Apr
+            $labels[] = Carbon::now()->subDays($i)->format('d M');
             $dataVisits[] = $chartData[$date] ?? 0;
         }
 
-        // 3. KATEGORI (Donut Chart)
-        // Kita hitung user unik yang datang hari ini berdasarkan kategori
-        $categoryStats = VisitLog::whereDate('waktu_masuk', $today)
-            ->with('member')
-            ->get()
-            ->groupBy('member.kategori')
-            ->map->count();
-            
-        $mhsCount = $categoryStats['Mahasiswa'] ?? 0;
-        $dosenCount = $categoryStats['Dosen'] ?? 0;
+        // 3. KATEGORI PENGUNJUNG HARI INI (Donut Chart)
+        // Mengambil data hari ini beserta relasi member
+        $visitsToday = VisitLog::with('member')->whereDate('waktu_masuk', $today)->get();
+        
+        // Menghitung jumlah berdasarkan kategori (menggunakan strtolower untuk antisipasi perbedaan huruf besar/kecil di DB)
+        $mhsCount = $visitsToday->filter(function ($visit) {
+            return $visit->member && strtolower($visit->member->kategori) === 'mahasiswa';
+        })->count();
 
-        // 4. TABEL KUNJUNGAN TERBARU
-        $latestVisits = VisitLog::with('member') // Eager load relasi member
+        $dosenCount = $visitsToday->filter(function ($visit) {
+            return $visit->member && strtolower($visit->member->kategori) === 'dosen';
+        })->count();
+
+        // 4. TABEL KUNJUNGAN TERBARU (5 Data Terakhir)
+        $latestVisits = VisitLog::with('member')
             ->whereDate('waktu_masuk', $today)
             ->orderBy('waktu_masuk', 'desc')
             ->limit(5)
@@ -70,7 +74,7 @@ class DashboardController extends Controller
 
     public function active()
     {
-        // Mengambil data yang waktu_keluarnya masih NULL
+        // Menampilkan pengunjung yang belum checkout (waktu_keluar masih NULL)
         $activeVisitors = VisitLog::with('member')
             ->whereNull('waktu_keluar')
             ->orderBy('waktu_masuk', 'desc')
@@ -81,11 +85,11 @@ class DashboardController extends Controller
 
     public function logs(Request $request)
     {
-        // Ambil semua data log, urutkan dari yang terbaru
+        // Query dasar mengambil data log beserta data membernya
         $query = VisitLog::with('member')->orderBy('waktu_masuk', 'desc');
 
-        // Filter Tanggal (Jika user memilih range tanggal)
-        if ($request->has('start_date') && $request->has('end_date')) {
+        // Filter berdasarkan Tanggal (Jika user memilih rentang tanggal)
+        if ($request->has('start_date') && $request->has('end_date') && $request->start_date != null) {
             $query->whereBetween('waktu_masuk', [
                 $request->start_date . ' 00:00:00', 
                 $request->end_date . ' 23:59:59'
@@ -94,12 +98,45 @@ class DashboardController extends Controller
 
         $visits = $query->get();
 
-        // KELOMPOKKAN DATA BERDASARKAN TANGGAL
-        // Hasilnya: ['2025-04-25' => [data_log_1, data_log_2], '2025-04-26' => [...]]
+        // Mengelompokkan data berdasarkan Tanggal (Y-m-d) untuk tampilan Accordion/Rekapitulasi
         $groupedLogs = $visits->groupBy(function($date) {
-            return \Carbon\Carbon::parse($date->waktu_masuk)->format('Y-m-d');
+            return Carbon::parse($date->waktu_masuk)->format('Y-m-d');
         });
 
         return view('logs', compact('groupedLogs'));
+    }
+
+    // --- FITUR EXPORT EXCEL ---
+    public function exportExcel(Request $request)
+    {
+        // Memanggil Class Export yang sudah dibuat sebelumnya
+        return Excel::download(new VisitLogsExport($request), 'rekap_kunjungan_' . date('Y-m-d_His') . '.xlsx');
+    }
+
+    // --- FITUR EXPORT PDF ---
+    public function exportPdf(Request $request)
+    {
+        // Gunakan logika query yang sama dengan logs/excel agar data konsisten
+        $query = VisitLog::with('member')->orderBy('waktu_masuk', 'asc');
+
+        $periode = 'Seluruh Data';
+
+        if ($request->has('start_date') && $request->has('end_date') && $request->start_date != null) {
+            $query->whereBetween('waktu_masuk', [
+                $request->start_date . ' 00:00:00', 
+                $request->end_date . ' 23:59:59'
+            ]);
+            $periode = Carbon::parse($request->start_date)->format('d/m/Y') . ' - ' . Carbon::parse($request->end_date)->format('d/m/Y');
+        }
+
+        $visits = $query->get();
+
+        // Load view khusus PDF
+        $pdf = Pdf::loadView('exports.logs_pdf', compact('visits', 'periode'));
+        
+        // Set orientasi kertas jika kolom banyak (opsional)
+        $pdf->setPaper('a4', 'portrait');
+
+        return $pdf->download('laporan_kunjungan_' . date('Y-m-d') . '.pdf');
     }
 }
