@@ -11,7 +11,7 @@
                 {{-- UID --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">UID Kartu RFID</label>
-                    <input type="text" name="uid" value="{{ old('uid') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Contoh: 61 1A C8 05" required>
+                    <input type="text" name="uid" value="{{ old('uid') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-blue-500 focus:border-blue-500" placeholder="" required>
                     @error('uid') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 

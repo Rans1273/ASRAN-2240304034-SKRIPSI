@@ -9,17 +9,16 @@ class MemberController extends Controller
 {
     // Menampilkan daftar member
     public function index(Request $request)
-    {
-        $query = Member::query();
+        {
+            $query = Member::query();
 
-        // Fitur pencarian sederhana
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where('nama', 'LIKE', "%{$search}%")
-                  ->orWhere('nim_nip', 'LIKE', "%{$search}%")
-                  ->orWhere('uid', 'LIKE', "%{$search}%");
-        }
-
+            // Fitur pencarian sederhana
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where('nama', 'LIKE', "%{$search}%")
+                    ->orWhere('npm_nip', 'LIKE', "%{$search}%") // Mengubah 'nim_nip' menjadi 'npm_nip'
+                    ->orWhere('uid', 'LIKE', "%{$search}%");
+            }
         $members = $query->orderBy('created_at', 'desc')->paginate(10);
 
         return view('members.index', compact('members'));
@@ -57,16 +56,16 @@ class MemberController extends Controller
 
     // Memperbarui data di database
     public function update(Request $request, Member $member)
-    {
-        $request->validate([
-            'uid' => 'required|unique:members,uid,'.$member->id,
-            'nama' => 'required',
-            'nim_nip' => 'required|unique:members,nim_nip,'.$member->id,
-            'kategori' => 'required',
-            'fakultas' => 'required',
-            'jurusan' => 'required',
-            'status' => 'required',
-        ]);
+        {
+            $request->validate([
+                'uid' => 'required|unique:members,uid,'.$member->id,
+                'nama' => 'required',
+                'npm_nip' => 'required|unique:members,npm_nip,'.$member->id, // Mengubah 'nim_nip' menjadi 'npm_nip'
+                'kategori' => 'required',
+                'fakultas' => 'required',
+                'jurusan' => 'required',
+                'status' => 'required',
+            ]);
 
         $member->update($request->all());
 

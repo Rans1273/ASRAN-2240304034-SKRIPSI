@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use PhpMqtt\Client\MqttClient;
 use PhpMqtt\Client\ConnectionSettings;
 use App\Models\Member; // Panggil Model Member
+use App\Models\VisitLog; // Tambahkan Model VisitLog untuk pencatatan
 
 class MqttGateListener extends Command
 {
@@ -48,28 +49,58 @@ class MqttGateListener extends Command
                 
                 // 3. CEK DATABASE
                 // Pastikan nama kolom di database sesuai ('uid' atau 'rfid_uid')
-                $member = \App\Models\Member::where('uid', $uid_bersih)->first();
+                $member = Member::where('uid', $uid_bersih)->first();
+
+                $keputusan = 'TOLAK'; // Default keputusan
 
                 if ($member) {
                     $this->info("4. Hasil Pencarian DB      : DITEMUKAN ✅");
                     $this->info("   - Nama: $member->nama");
+                    $this->info("   - Kategori: $member->kategori");
                     $this->info("   - Status: $member->status");
 
                     if ($member->status == 'aktif') {
-                        $this->info(">> KEPUTUSAN: BUKA");
-                        $mqtt->publish($topic_perintah, 'BUKA', 0);
+                        $keputusan = 'BUKA';
+                        
+                        // PERBEDAAN UTAMA: LOGGING HANYA UNTUK NON-STAFF
+                        if ($member->kategori !== 'staff') { //
+                            $last_log = VisitLog::where('member_id', $member->id)
+                                ->whereNull('waktu_keluar')
+                                ->latest('waktu_masuk')
+                                ->first();
+
+                            if ($last_log) {
+                                // Log ditemukan: Member sedang di dalam (Masuk), catat waktu keluar
+                                $last_log->waktu_keluar = now();
+                                $last_log->save();
+                                $this->info(">> LOG: Waktu KELUAR dicatat untuk $member->nama.");
+                            } else {
+                                // Log tidak ditemukan: Member di luar, catat waktu masuk baru
+                                VisitLog::create([
+                                    'member_id' => $member->id,
+                                    'waktu_masuk' => now(),
+                                ]);
+                                $this->info(">> LOG: Waktu MASUK dicatat untuk $member->nama.");
+                            }
+                        } else {
+                            $this->warn(">> LOG: Pencatatan diabaikan karena Kategori: STAFF.");
+                        }
+
+                        $this->info(">> KEPUTUSAN GATE: BUKA");
+
                     } else {
-                        $this->warn(">> KEPUTUSAN: DITOLAK (Status Blokir)");
-                        $mqtt->publish($topic_perintah, 'TOLAK', 0);
+                        $this->warn(">> KEPUTUSAN GATE: DITOLAK (Status Blokir)");
+                        $keputusan = 'TOLAK';
                     }
                 } else {
                     $this->error("4. Hasil Pencarian DB      : TIDAK DITEMUKAN ❌");
-                    $this->info(">> Saran: Cek apakah di database UID-nya sama persis?");
-                    $this->info(">> KEPUTUSAN: DITOLAK");
-                    $mqtt->publish($topic_perintah, 'TOLAK', 0);
+                    $this->info(">> KEPUTUSAN GATE: DITOLAK");
                 }
+                
+                // Publish command ke MQTT
+                $mqtt->publish($topic_perintah, $keputusan, 0);
+                
                 $this->line("------------------------------------------------");
-
             }, 0);
 
             $mqtt->loop(true);

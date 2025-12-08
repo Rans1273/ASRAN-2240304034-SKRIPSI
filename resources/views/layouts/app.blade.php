@@ -19,14 +19,6 @@
             <h1 class="text-2xl font-bold text-gray-800">@yield('title')</h1>
             
             <div class="flex items-center gap-4">
-                <div class="flex items-center border rounded-lg px-3 py-2 text-sm text-gray-600 bg-white">
-                    <i class="far fa-calendar-alt mr-2"></i>
-                    <span>25/04/2025 – 30/04/2025</span>
-                </div>
-                
-                <button class="border rounded-lg px-4 py-2 text-sm text-gray-600 flex items-center bg-white">
-                    Filter <i class="fas fa-chevron-down ml-2"></i>
-                </button>
 
                 <div class="flex border rounded-lg overflow-hidden">
                     <a href="{{ route('dashboard') }}" class="px-4 py-2 text-sm {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-600 font-medium' : 'bg-white text-gray-600' }}">Ringkas</a>

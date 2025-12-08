@@ -20,7 +20,12 @@ class VisitLogsExport implements FromCollection, WithHeadings, WithMapping, Shou
 
     public function collection()
     {
-        $query = VisitLog::with('member')->orderBy('waktu_masuk', 'asc');
+        // Filter: Hanya ambil log yang membernya BUKAN staff
+        $query = VisitLog::with('member')
+            ->whereHas('member', function($q) {
+                $q->where('kategori', '!=', 'staff');
+            })
+            ->orderBy('waktu_masuk', 'asc');
 
         // Terapkan filter tanggal jika ada
         if ($this->request->has('start_date') && $this->request->has('end_date') && $this->request->start_date != null) {

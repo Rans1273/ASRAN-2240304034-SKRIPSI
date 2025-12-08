@@ -19,7 +19,9 @@
                 {{-- NPM/NIP --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">NPM / NIP</label>
+                    {{-- Input name dan value sudah benar menggunakan 'npm_nip' --}}
                     <input type="text" name="npm_nip" value="{{ old('npm_nip', $member->npm_nip) }}" class="w-full border border-gray-300 rounded-lg px-4 py-2" required>
+                    @error('npm_nip') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 
                 {{-- Nama --}}

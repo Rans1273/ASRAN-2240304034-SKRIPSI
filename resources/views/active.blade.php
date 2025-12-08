@@ -46,7 +46,7 @@
                 @forelse($activeVisitors as $visitor)
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-medium text-gray-900">{{ $visitor->member->nama }}</td>
-                    <td class="px-6 py-4">{{ $visitor->member->nim_nip }}</td>
+                    <td class="px-6 py-4">{{ $visitor->member->npm_nip }}</td>
                     <td class="px-6 py-4">{{ $visitor->waktu_masuk->format('d/m/Y, H.i') }}</td>
                     <td class="px-6 py-4">
                         @if($visitor->member->kategori == 'Dosen')

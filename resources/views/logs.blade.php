@@ -52,8 +52,8 @@
                     @php
                         // Hitung statistik menggunakan filter() karena ini Collection
                         $total = $logs->count();
-                        $mhs = $logs->filter(fn($log) => $log->member->kategori == 'Mahasiswa')->count();
-                        $dosen = $logs->filter(fn($log) => $log->member->kategori == 'Dosen')->count();
+                        $mhs = $logs->filter(fn($log) => strtolower($log->member->kategori) == 'mahasiswa')->count(); //
+                        $dosen = $logs->filter(fn($log) => strtolower($log->member->kategori) == 'dosen')->count(); //
                         $rowId = 'details-' . str_replace('-', '', $date);
                     @endphp
 

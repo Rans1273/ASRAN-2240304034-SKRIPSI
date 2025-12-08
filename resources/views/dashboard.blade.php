@@ -33,16 +33,16 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h4 class="font-bold text-gray-800 mb-4">Kunjungan 7 Hari Terakhir</h4>
-            <canvas id="visitorsChart" height="150"></canvas>
+            <canvas id="visitorsChart" height="110"></canvas>
             <div class="mt-4 text-right">
-                 <span class="text-gray-500 text-xs">Perbandingan Harian</span>
-                 <span class="text-green-600 font-bold text-sm ml-2">+{{ $percentage }} %</span>
+                <span class="text-gray-500 text-xs">Perbandingan Harian</span>
+                <span class="text-green-600 font-bold text-sm ml-2">+{{ $percentage }} %</span>
             </div>
         </div>
 
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h4 class="font-bold text-gray-800 mb-4">Kategori Pengunjung</h4>
-            <div class="relative" style="height: 200px;">
+            <h4 class="font-bold text-gray-800 mb-">Kategori Pengunjung</h4>
+            <div class="relative" style="height: 220px; margin-top: 50px;">
                 <canvas id="categoryChart"></canvas>
             </div>
             <div class="flex justify-between mt-4 text-xs text-gray-500 px-4">
@@ -73,7 +73,7 @@
                         @forelse($latestVisits as $visit)
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 font-medium text-gray-900">{{ $visit->member->nama }}</td>
-                            <td class="px-4 py-3">{{ $visit->member->nim_nip }}</td>
+                            <td class="px-4 py-3">{{ $visit->member->npm_nip }}</td>
                             <td class="px-4 py-3">{{ $visit->waktu_masuk->format('d/m/Y H:i') }}</td>
                             <td class="px-4 py-3">
                                 @if($visit->status == 'Masuk' && $visit->waktu_keluar == null)
