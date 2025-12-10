@@ -47,7 +47,6 @@ class DashboardController extends Controller
         $monthCount = (clone $baseQuery)->whereMonth('waktu_masuk', Carbon::now()->month)->count();
 
         // 2. GRAFIK 7 HARI TERAKHIR (Line Chart)
-        // Menggunakan join untuk filter kategori 'staff' karena melibatkan DB::raw dan groupBy pada kolom tanggal
         $chartData = VisitLog::select(DB::raw('DATE(visit_logs.waktu_masuk) as date'), DB::raw('count(*) as total'))
             ->join('members', 'visit_logs.member_id', '=', 'members.id')
             ->where('members.kategori', '!=', 'staff') // Filter Staff
@@ -67,12 +66,10 @@ class DashboardController extends Controller
         }
 
         // 3. KATEGORI PENGUNJUNG HARI INI (Donut Chart)
-        // Mengambil data hari ini beserta relasi member (sudah difilter oleh excludeStaff)
         $visitsToday = $this->excludeStaff(VisitLog::with('member'))
             ->whereDate('waktu_masuk', $today)
             ->get();
         
-        // Menghitung jumlah berdasarkan kategori (menggunakan strtolower untuk antisipasi perbedaan huruf besar/kecil di DB)
         $mhsCount = $visitsToday->filter(function ($visit) {
             return $visit->member && strtolower($visit->member->kategori) === 'mahasiswa';
         })->count();
@@ -96,13 +93,30 @@ class DashboardController extends Controller
         ));
     }
 
-    public function active()
+    public function active(Request $request)
     {
-        // Menampilkan pengunjung yang belum checkout (waktu_keluar masih NULL) dan BUKAN staf
-        $activeVisitors = $this->excludeStaff(VisitLog::with('member'))
+        // Query dasar mengambil pengunjung yang belum checkout (waktu_keluar masih NULL), dan BUKAN staf
+        $query = $this->excludeStaff(VisitLog::with('member'))
             ->whereNull('waktu_keluar')
-            ->orderBy('waktu_masuk', 'desc')
-            ->get();
+            ->orderBy('waktu_masuk', 'desc');
+
+        // Tambahkan filter Pencarian (Search)
+        if ($request->has('search') && $request->search != null) {
+            $search = $request->search;
+            $query->whereHas('member', function($q) use ($search) {
+                $q->where('nama', 'LIKE', "%{$search}%")
+                  ->orWhere('npm_nip', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Tambahkan filter Kategori (Category)
+        if ($request->has('kategori') && $request->kategori != null) {
+            $query->whereHas('member', function($q) use ($request) {
+                $q->where('kategori', $request->kategori);
+            });
+        }
+
+        $activeVisitors = $query->get();
 
         return view('active', compact('activeVisitors'));
     }
@@ -134,25 +148,54 @@ class DashboardController extends Controller
     // --- FITUR EXPORT EXCEL ---
     public function exportExcel(Request $request)
     {
-        // Memanggil Class Export yang sudah diubah (VisitLogsExport.php) untuk mengecualikan staff
+        // Pengecekan apakah ini export dari halaman pengunjung aktif
+        if ($request->has('active_only') && $request->active_only == 'true') {
+            // Menggunakan VisitLogsExport yang seharusnya sudah diupdate untuk menangani active_only dan filter
+            return Excel::download(new VisitLogsExport($request), 'pengunjung_aktif_' . date('Y-m-d_His') . '.xlsx');
+        }
+        
+        // Logika default untuk logs (jika tidak ada active_only)
         return Excel::download(new VisitLogsExport($request), 'rekap_kunjungan_' . date('Y-m-d_His') . '.xlsx');
     }
 
     // --- FITUR EXPORT PDF ---
     public function exportPdf(Request $request)
     {
-        // Gunakan logika query yang sama dengan logs/excel agar data konsisten, dan BUKAN staf
-        $query = $this->excludeStaff(VisitLog::with('member'))
-            ->orderBy('waktu_masuk', 'asc');
+        // Gunakan logika query yang sama dengan logs/excel
+        $query = $this->excludeStaff(VisitLog::with('member'));
 
         $periode = 'Seluruh Data';
 
-        if ($request->has('start_date') && $request->has('end_date') && $request->start_date != null) {
-            $query->whereBetween('waktu_masuk', [
-                $request->start_date . ' 00:00:00', 
-                $request->end_date . ' 23:59:59'
-            ]);
-            $periode = Carbon::parse($request->start_date)->format('d/m/Y') . ' - ' . Carbon::parse($request->end_date)->format('d/m/Y');
+        // Pengecekan apakah ini export dari halaman pengunjung aktif
+        if ($request->has('active_only') && $request->active_only == 'true') {
+            $query->whereNull('waktu_keluar')
+                  ->orderBy('waktu_masuk', 'desc');
+            $periode = 'Pengunjung Aktif Saat Ini';
+
+            // Terapkan filter Search/Category dari halaman Active
+            if ($request->has('search') && $request->search != null) {
+                $search = $request->search;
+                $query->whereHas('member', function($q) use ($search) {
+                    $q->where('nama', 'LIKE', "%{$search}%")
+                      ->orWhere('npm_nip', 'LIKE', "%{$search}%");
+                });
+            }
+            if ($request->has('kategori') && $request->kategori != null) {
+                $query->whereHas('member', function($q) use ($request) {
+                    $q->where('kategori', $request->kategori);
+                });
+            }
+
+        } else {
+            // Logika default untuk logs (filter tanggal)
+            $query->orderBy('waktu_masuk', 'asc');
+            if ($request->has('start_date') && $request->has('end_date') && $request->start_date != null) {
+                $query->whereBetween('waktu_masuk', [
+                    $request->start_date . ' 00:00:00', 
+                    $request->end_date . ' 23:59:59'
+                ]);
+                $periode = Carbon::parse($request->start_date)->format('d/m/Y') . ' - ' . Carbon::parse($request->end_date)->format('d/m/Y');
+            }
         }
 
         $visits = $query->get();
@@ -160,9 +203,13 @@ class DashboardController extends Controller
         // Load view khusus PDF
         $pdf = Pdf::loadView('exports.logs_pdf', compact('visits', 'periode'));
         
-        // Set orientasi kertas jika kolom banyak (opsional)
+        // Set orientasi kertas
         $pdf->setPaper('a4', 'portrait');
 
-        return $pdf->download('laporan_kunjungan_' . date('Y-m-d') . '.pdf');
+        if ($request->has('active_only') && $request->active_only == 'true') {
+            return $pdf->download('laporan_aktif_' . date('Y-m-d') . '.pdf');
+        } else {
+            return $pdf->download('laporan_kunjungan_' . date('Y-m-d') . '.pdf');
+        }
     }
 }
