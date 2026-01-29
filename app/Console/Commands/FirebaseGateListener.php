@@ -3,70 +3,135 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Member;
-use App\Models\VisitLog;
-// Hapus atau komen baris Contract\Database jika masih merah
-// use Kreait\Firebase\Contract\Database; 
+use App\Models\Member; //
+use App\Models\VisitLog; //
+use Carbon\Carbon;
+use Kreait\Firebase\Contract\Database; //
 
 class FirebaseGateListener extends Command
 {
+    /**
+     * Nama dan signature dari console command.
+     * Jalankan dengan: php artisan gate:firebase-listen
+     */
     protected $signature = 'gate:firebase-listen';
-    protected $description = 'Memantau Firebase Realtime Database untuk aksi Smart Gate';
+
+    /**
+     * Deskripsi console command.
+     */
+    protected $description = 'Memantau Firebase Realtime Database untuk aksi Smart Gate dan mencatat kunjungan';
 
     protected $database;
 
-    // Ubah constructor agar tidak meminta Interface secara langsung
-    public function __construct()
+    /**
+     * Membuat instance command baru.
+     */
+    public function __construct(Database $database)
     {
         parent::__construct();
+        $this->database = $database;
     }
 
+    /**
+     * Mengeksekusi console command.
+     */
     public function handle()
     {
-        $this->info("✅ Menghubungkan ke Firebase...");
+        $this->info("✅ Menghubungkan ke Firebase. Menunggu kartu ditap...");
 
         try {
-            // Memanggil database melalui app container (Laravel Firebase Provider)
-            $this->database = app('firebase.database'); 
+            // Referensi ke path 'gate_system' di Firebase Realtime Database
             $reference = $this->database->getReference('gate_system');
         } catch (\Exception $e) {
             $this->error("Gagal terhubung ke Firebase: " . $e->getMessage());
             return self::FAILURE;
         }
 
-        $this->info("✅ Berhasil! Menunggu kartu ditap...");
-
+        // Loop terus-menerus untuk mendengarkan perubahan data di Firebase
         while (true) {
             try {
                 $snapshot = $reference->getValue();
-                // ... (Sisa kode logika Anda tetap sama seperti sebelumnya)
-                
-                // Contoh logika pengecekan singkat
+                $lastUid = $snapshot['last_uid'] ?? null;
                 $command = $snapshot['command'] ?? 'done';
-                if ($command === 'waiting') {
-                    $this->processGate($reference, $snapshot['last_uid'] ?? '');
-                }
 
+                // Jika ESP32 mengirim status 'waiting', proses logika gate
+                if ($command === 'waiting' && !empty($lastUid)) {
+                    $this->processGate($reference, $lastUid);
+                }
             } catch (\Exception $e) {
-                $this->error("Error: " . $e->getMessage());
+                $this->error("Error saat memantau Firebase: " . $e->getMessage());
             }
 
-            sleep(1); 
+            // Jeda 1 detik agar tidak membebani server
+            sleep(1);
         }
     }
 
-    // Pindahkan logika ke fungsi terpisah agar rapi
-    private function processGate($reference, $uid) {
+    /**
+     * Logika utama pemrosesan gate dan database MySQL
+     */
+    private function processGate($reference, $uid)
+    {
         $uidBersih = strtoupper(trim($uid));
+        $this->info("------------------------------------------------");
+        $this->info("RFID Terdeteksi: $uidBersih");
+        
+        // 1. Cari member di database MySQL berdasarkan UID
         $member = Member::where('uid', $uidBersih)->first();
 
-        if ($member && $member->status == 'aktif') {
-            $this->info("Akses diterima: " . $member->nama);
-            // Logika VisitLog ...
-            $reference->update(['command' => 'open']);
+        if ($member) {
+            // Cek apakah member dalam status aktif
+            if ($member->status !== 'aktif') {
+                $this->error("Akses Ditolak: Member " . $member->nama . " tidak aktif.");
+                $reference->update([
+                    'command' => 'reject',
+                    'status_msg' => 'Member Tidak Aktif'
+                ]);
+                return;
+            }
+
+            $this->info("Member Ditemukan: " . $member->nama);
+
+            // 2. Logika pencatatan VisitLog (Tap Masuk vs Tap Keluar)
+            // Cari data kunjungan terakhir member yang belum mencatat waktu keluar
+            $lastLog = VisitLog::where('member_id', $member->id)
+                ->whereNull('waktu_keluar')
+                ->latest('waktu_masuk')
+                ->first();
+
+            if ($lastLog) {
+                // --- LOGIKA TAP KELUAR ---
+                // Jika ada log masuk yang belum keluar, update waktu_keluar
+                $lastLog->update([
+                    'waktu_keluar' => Carbon::now()
+                ]);
+                $this->info("Aksi: TAP KELUAR dicatat untuk " . $member->nama);
+            } else {
+                // --- LOGIKA TAP MASUK ---
+                // Jika tidak ada log yang menggantung, buat data kunjungan baru
+                VisitLog::create([
+                    'member_id'   => $member->id,
+                    'waktu_masuk' => Carbon::now(),
+                    'waktu_keluar'=> null,
+                ]);
+                $this->info("Aksi: TAP MASUK dicatat untuk " . $member->nama);
+            }
+
+            // 3. Kirim perintah balik ke Firebase untuk aksi alat (Buka Gate/Indikator)
+            $reference->update([
+                'command' => 'open',
+                'last_name' => $member->nama,
+                'status_msg' => 'Akses Diterima'
+            ]);
+
         } else {
-            $this->error("Akses ditolak untuk UID: " . $uidBersih);
-            $reference->update(['command' => 'reject']);
+            // Member tidak terdaftar di MySQL
+            $this->error("Akses Ditolak: UID " . $uidBersih . " tidak terdaftar.");
+            $reference->update([
+                'command' => 'reject',
+                'status_msg' => 'Kartu Tidak Terdaftar'
+            ]);
         }
+        $this->info("------------------------------------------------");
     }
 }
