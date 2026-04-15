@@ -16,7 +16,7 @@
                 {{ $percentage >= 0 ? '+' : '' }} {{ $percentage }} %
             </p>
         </div>
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"> 
             <p class="text-gray-500 text-sm font-medium">Kemarin</p>
             <h3 class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($yesterdayCount) }}</h3>
         </div>
