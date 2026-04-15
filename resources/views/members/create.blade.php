@@ -31,10 +31,10 @@
                 {{-- Kategori --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Kategori</label>
-                    <select name="kategori" class="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white">
-                        <option value="Mahasiswa">Mahasiswa</option>
-                        <option value="Dosen">Dosen</option>
-                        <option value="Staff">Staff</option>
+                    <select name="kategori" id="kategori" onchange="aturKolom()" class="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white">
+                        <option value="Mahasiswa" {{ old('kategori') == 'Mahasiswa' ? 'selected' : '' }}>Mahasiswa</option>
+                        <option value="Dosen" {{ old('kategori') == 'Dosen' ? 'selected' : '' }}>Dosen</option>
+                        <option value="Staff" {{ old('kategori') == 'Staff' ? 'selected' : '' }}>Staff</option>
                     </select>
                 </div>
 
@@ -42,12 +42,12 @@
                     {{-- Fakultas --}}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Fakultas</label>
-                        <input type="text" name="fakultas" value="{{ old('fakultas') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <input type="text" name="fakultas" id="fakultas" value="{{ old('fakultas') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2 transition-colors duration-200">
                     </div>
                     {{-- Jurusan --}}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Jurusan</label>
-                        <input type="text" name="jurusan" value="{{ old('jurusan') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <input type="text" name="jurusan" id="jurusan" value="{{ old('jurusan') }}" class="w-full border border-gray-300 rounded-lg px-4 py-2 transition-colors duration-200">
                     </div>
                 </div>
 
@@ -67,4 +67,48 @@
             </div>
         </form>
     </div>
+@endsection
+
+@section('scripts')
+<script>
+    // Jalankan saat halaman pertama kali dimuat (berguna jika ada error validasi dan form me-reload)
+    document.addEventListener('DOMContentLoaded', function() {
+        aturKolom();
+    });
+
+    function aturKolom() {
+        const kategori = document.getElementById('kategori').value;
+        const fakultas = document.getElementById('fakultas');
+        const jurusan = document.getElementById('jurusan');
+
+        // Perhatikan huruf besar 'S' pada 'Staff' sesuai dengan value di option Anda
+        if (kategori === 'Staff') {
+            fakultas.disabled = true;
+            jurusan.disabled = true;
+            
+            // Beri warna abu-abu agar terlihat non-aktif
+            fakultas.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-400');
+            jurusan.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-400');
+            
+            // Kosongkan isinya
+            fakultas.value = '';
+            jurusan.value = '';
+            
+            // Hapus atribut wajib
+            fakultas.required = false;
+            jurusan.required = false;
+        } else {
+            fakultas.disabled = false;
+            jurusan.disabled = false;
+            
+            // Kembalikan ke warna putih normal
+            fakultas.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-400');
+            jurusan.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-400');
+            
+            // Wajib diisi untuk Mahasiswa & Dosen
+            fakultas.required = true;
+            jurusan.required = true;
+        }
+    }
+</script>
 @endsection

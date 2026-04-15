@@ -11,3 +11,5 @@ Route::resource('members', MemberController::class);
 
 Route::get('/logs/export/excel', [DashboardController::class, 'exportExcel'])->name('visitors.export.excel');
 Route::get('/logs/export/pdf', [DashboardController::class, 'exportPdf'])->name('visitors.export.pdf');
+
+Route::get('/dashboard/realtime', [DashboardController::class, 'realtime'])->name('dashboard.realtime');

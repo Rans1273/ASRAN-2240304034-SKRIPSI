@@ -212,4 +212,55 @@ class DashboardController extends Controller
             return $pdf->download('laporan_kunjungan_' . date('Y-m-d') . '.pdf');
         }
     }
+
+    public function realtime()
+    {
+        $today = Carbon::today();
+        $baseQuery = $this->excludeStaff(VisitLog::query());
+
+        // Hitung ulang data statistik
+        $todayCount = (clone $baseQuery)->whereDate('waktu_masuk', $today)->count();
+        $yesterdayCount = (clone $baseQuery)->whereDate('waktu_masuk', Carbon::yesterday())->count();
+        $diff = $todayCount - $yesterdayCount;
+        $percentage = $yesterdayCount > 0 ? round(($diff / $yesterdayCount) * 100, 1) : 100;
+        
+        $weekCount = (clone $baseQuery)->whereBetween('waktu_masuk', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])->count();
+        $monthCount = (clone $baseQuery)->whereMonth('waktu_masuk', Carbon::now()->month)->count();
+
+        // Ambil tabel kunjungan terbaru
+        $latestVisits = $this->excludeStaff(VisitLog::with('member'))
+            ->whereDate('waktu_masuk', $today)
+            ->orderBy('waktu_masuk', 'desc')
+            ->limit(5)
+            ->get();
+        
+        // Render tabel HTML di belakang layar
+        $latestHtml = '';
+        if($latestVisits->count() > 0) {
+            foreach($latestVisits as $visit) {
+                $statusHtml = ($visit->status == 'Masuk' && $visit->waktu_keluar == null) 
+                    ? '<span class="text-green-600 font-bold">Masuk</span>'
+                    : '<span class="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold">Keluar</span>';
+                
+                $latestHtml .= '<tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium text-gray-900">'.$visit->member->nama.'</td>
+                    <td class="px-4 py-3">'.$visit->member->npm_nip.'</td>
+                    <td class="px-4 py-3">'.$visit->waktu_masuk->format('d/m/Y H:i').'</td>
+                    <td class="px-4 py-3">'.$statusHtml.'</td>
+                </tr>';
+            }
+        } else {
+            $latestHtml = '<tr><td colspan="4" class="text-center py-4 text-gray-400">Belum ada data kunjungan hari ini.</td></tr>';
+        }
+
+        // Kirim semua data sebagai JSON
+        return response()->json([
+            'todayCount' => number_format($todayCount),
+            'yesterdayCount' => number_format($yesterdayCount),
+            'weekCount' => number_format($weekCount),
+            'monthCount' => number_format($monthCount),
+            'percentage' => $percentage,
+            'latestHtml' => $latestHtml
+        ]);
+    }
 }

@@ -11,22 +11,22 @@
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
             <p class="text-gray-500 text-sm font-medium">Hari ini</p>
-            <h3 class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($todayCount) }}</h3>
-            <p class="{{ $percentage >= 0 ? 'text-green-500' : 'text-red-500' }} text-xs font-bold mt-1">
+            <h3 id="stat-today" class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($todayCount) }}</h3>
+            <p id="stat-percent" class="{{ $percentage >= 0 ? 'text-green-500' : 'text-red-500' }} text-xs font-bold mt-1">
                 {{ $percentage >= 0 ? '+' : '' }} {{ $percentage }} %
             </p>
         </div>
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100"> 
             <p class="text-gray-500 text-sm font-medium">Kemarin</p>
-            <h3 class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($yesterdayCount) }}</h3>
+            <h3 id="stat-yesterday" class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($yesterdayCount) }}</h3>
         </div>
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
             <p class="text-gray-500 text-sm font-medium">Minggu ini</p>
-            <h3 class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($weekCount) }}</h3>
+            <h3 id="stat-week" class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($weekCount) }}</h3>
         </div>
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
             <p class="text-gray-500 text-sm font-medium">Bulan ini</p>
-            <h3 class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($monthCount) }}</h3>
+            <h3 id="stat-month" class="text-3xl font-bold text-gray-800 mt-1">{{ number_format($monthCount) }}</h3>
         </div>
     </div>
 
@@ -69,7 +69,7 @@
                             <th class="px-4 py-3 rounded-tr-lg">Status</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100">
+                    <tbody id="table-latest-visits" class="divide-y divide-gray-100">
                         @forelse($latestVisits as $visit)
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 font-medium text-gray-900">{{ $visit->member->nama }}</td>
@@ -97,6 +97,37 @@
 
 @section('scripts')
 <script>
+
+    // Fungsi untuk mengambil data terbaru di balik layar
+    function updateDashboard() {
+        fetch('{{ route("dashboard.realtime") }}')
+            .then(response => response.json())
+            .then(data => {
+                // Update angka kartu
+                document.getElementById('stat-today').innerText = data.todayCount;
+                document.getElementById('stat-yesterday').innerText = data.yesterdayCount;
+                document.getElementById('stat-week').innerText = data.weekCount;
+                document.getElementById('stat-month').innerText = data.monthCount;
+                
+                // Update persentase
+                let percentEl = document.getElementById('stat-percent');
+                let symbol = data.percentage >= 0 ? '+' : '';
+                percentEl.innerText = symbol + ' ' + data.percentage + ' %';
+                percentEl.className = data.percentage >= 0 
+                    ? 'text-green-500 text-xs font-bold mt-1' 
+                    : 'text-red-500 text-xs font-bold mt-1';
+
+                // Update tabel terbaru
+                document.getElementById('table-latest-visits').innerHTML = data.latestHtml;
+            })
+            .catch(error => console.error('Gagal mengambil data:', error));
+    }
+
+    // Jalankan fungsi otomatis setiap 3 detik (3000 milidetik)
+    setInterval(updateDashboard, 3000);
+
+
+
     // Konfigurasi Line Chart (Data Dinamis dari Controller)
     const ctxVisits = document.getElementById('visitorsChart').getContext('2d');
     new Chart(ctxVisits, {
