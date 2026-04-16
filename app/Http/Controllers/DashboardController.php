@@ -55,7 +55,6 @@ class DashboardController extends Controller
             ->get()
             ->pluck('total', 'date');
 
-
         // Normalisasi data grafik
         $labels = [];
         $dataVisits = [];
@@ -105,7 +104,7 @@ class DashboardController extends Controller
             $search = $request->search;
             $query->whereHas('member', function($q) use ($search) {
                 $q->where('nama', 'LIKE', "%{$search}%")
-                  ->orWhere('npm_nip', 'LIKE', "%{$search}%");
+                ->orWhere('npm_nip', 'LIKE', "%{$search}%");
             });
         }
 
@@ -169,7 +168,7 @@ class DashboardController extends Controller
         // Pengecekan apakah ini export dari halaman pengunjung aktif
         if ($request->has('active_only') && $request->active_only == 'true') {
             $query->whereNull('waktu_keluar')
-                  ->orderBy('waktu_masuk', 'desc');
+                ->orderBy('waktu_masuk', 'desc');
             $periode = 'Pengunjung Aktif Saat Ini';
 
             // Terapkan filter Search/Category dari halaman Active
@@ -177,7 +176,7 @@ class DashboardController extends Controller
                 $search = $request->search;
                 $query->whereHas('member', function($q) use ($search) {
                     $q->where('nama', 'LIKE', "%{$search}%")
-                      ->orWhere('npm_nip', 'LIKE', "%{$search}%");
+                    ->orWhere('npm_nip', 'LIKE', "%{$search}%");
                 });
             }
             if ($request->has('kategori') && $request->kategori != null) {
