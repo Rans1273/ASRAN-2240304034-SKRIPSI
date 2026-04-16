@@ -218,7 +218,7 @@ class DashboardController extends Controller
         $today = Carbon::today();
         $baseQuery = $this->excludeStaff(VisitLog::query());
 
-        // Hitung ulang data statistik
+        // 1. KARTU STATISTIK
         $todayCount = (clone $baseQuery)->whereDate('waktu_masuk', $today)->count();
         $yesterdayCount = (clone $baseQuery)->whereDate('waktu_masuk', Carbon::yesterday())->count();
         $diff = $todayCount - $yesterdayCount;
@@ -227,14 +227,43 @@ class DashboardController extends Controller
         $weekCount = (clone $baseQuery)->whereBetween('waktu_masuk', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])->count();
         $monthCount = (clone $baseQuery)->whereMonth('waktu_masuk', Carbon::now()->month)->count();
 
-        // Ambil tabel kunjungan terbaru
+        // 2. GRAFIK 7 HARI (Line Chart)
+        $chartData = VisitLog::select(DB::raw('DATE(visit_logs.waktu_masuk) as date'), DB::raw('count(*) as total'))
+            ->join('members', 'visit_logs.member_id', '=', 'members.id')
+            ->where('members.kategori', '!=', 'staff')
+            ->where('visit_logs.waktu_masuk', '>=', Carbon::now()->subDays(6))
+            ->groupBy('date')
+            ->get()
+            ->pluck('total', 'date');
+
+        $labels = [];
+        $dataVisits = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i)->format('Y-m-d');
+            $labels[] = Carbon::now()->subDays($i)->format('d M');
+            $dataVisits[] = $chartData[$date] ?? 0;
+        }
+
+        // 3. KATEGORI PENGUNJUNG (Donut Chart)
+        $visitsToday = $this->excludeStaff(VisitLog::with('member'))
+            ->whereDate('waktu_masuk', $today)
+            ->get();
+        
+        $mhsCount = $visitsToday->filter(function ($visit) {
+            return $visit->member && strtolower($visit->member->kategori) === 'mahasiswa';
+        })->count();
+
+        $dosenCount = $visitsToday->filter(function ($visit) {
+            return $visit->member && strtolower($visit->member->kategori) === 'dosen';
+        })->count();
+
+        // 4. TABEL TERBARU
         $latestVisits = $this->excludeStaff(VisitLog::with('member'))
             ->whereDate('waktu_masuk', $today)
             ->orderBy('waktu_masuk', 'desc')
             ->limit(5)
             ->get();
-        
-        // Render tabel HTML di belakang layar
+
         $latestHtml = '';
         if($latestVisits->count() > 0) {
             foreach($latestVisits as $visit) {
@@ -253,14 +282,18 @@ class DashboardController extends Controller
             $latestHtml = '<tr><td colspan="4" class="text-center py-4 text-gray-400">Belum ada data kunjungan hari ini.</td></tr>';
         }
 
-        // Kirim semua data sebagai JSON
+        // Kirim semua data grafik dan angka sebagai JSON
         return response()->json([
             'todayCount' => number_format($todayCount),
             'yesterdayCount' => number_format($yesterdayCount),
             'weekCount' => number_format($weekCount),
             'monthCount' => number_format($monthCount),
             'percentage' => $percentage,
-            'latestHtml' => $latestHtml
+            'latestHtml' => $latestHtml,
+            'chartLabels' => $labels,
+            'chartVisits' => $dataVisits,
+            'mhsCount' => $mhsCount,
+            'dosenCount' => $dosenCount
         ]);
     }
 }

@@ -36,7 +36,9 @@
             <canvas id="visitorsChart" height="110"></canvas>
             <div class="mt-4 text-right">
                 <span class="text-gray-500 text-xs">Perbandingan Harian</span>
-                <span class="text-green-600 font-bold text-sm ml-2">+{{ $percentage }} %</span>
+                <span id="stat-percent-chart" class="{{ $percentage >= 0 ? 'text-green-600' : 'text-red-600' }} font-bold text-sm ml-2">
+                    {{ $percentage >= 0 ? '+' : '' }}{{ $percentage }} %
+                </span>
             </div>
         </div>
 
@@ -97,46 +99,15 @@
 
 @section('scripts')
 <script>
-
-    // Fungsi untuk mengambil data terbaru di balik layar
-    function updateDashboard() {
-        fetch('{{ route("dashboard.realtime") }}')
-            .then(response => response.json())
-            .then(data => {
-                // Update angka kartu
-                document.getElementById('stat-today').innerText = data.todayCount;
-                document.getElementById('stat-yesterday').innerText = data.yesterdayCount;
-                document.getElementById('stat-week').innerText = data.weekCount;
-                document.getElementById('stat-month').innerText = data.monthCount;
-                
-                // Update persentase
-                let percentEl = document.getElementById('stat-percent');
-                let symbol = data.percentage >= 0 ? '+' : '';
-                percentEl.innerText = symbol + ' ' + data.percentage + ' %';
-                percentEl.className = data.percentage >= 0 
-                    ? 'text-green-500 text-xs font-bold mt-1' 
-                    : 'text-red-500 text-xs font-bold mt-1';
-
-                // Update tabel terbaru
-                document.getElementById('table-latest-visits').innerHTML = data.latestHtml;
-            })
-            .catch(error => console.error('Gagal mengambil data:', error));
-    }
-
-    // Jalankan fungsi otomatis setiap 3 detik (3000 milidetik)
-    setInterval(updateDashboard, 3000);
-
-
-
-    // Konfigurasi Line Chart (Data Dinamis dari Controller)
+    // 1. Inisialisasi Grafik Pertama Kali Dimuat
     const ctxVisits = document.getElementById('visitorsChart').getContext('2d');
-    new Chart(ctxVisits, {
+    const myLineChart = new Chart(ctxVisits, {
         type: 'line',
         data: {
-            labels: @json($labels), // Array tanggal dari Controller
+            labels: @json($labels), 
             datasets: [{
                 label: 'Kunjungan',
-                data: @json($dataVisits), // Array jumlah dari Controller
+                data: @json($dataVisits), 
                 borderColor: '#3B82F6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 tension: 0.4,
@@ -155,14 +126,13 @@
         }
     });
 
-    // Konfigurasi Donut Chart (Data Dinamis)
     const ctxCategory = document.getElementById('categoryChart').getContext('2d');
-    new Chart(ctxCategory, {
+    const myDonutChart = new Chart(ctxCategory, {
         type: 'doughnut',
         data: {
             labels: ['Mahasiswa', 'Dosen'],
             datasets: [{
-                data: [{{ $mhsCount }}, {{ $dosenCount }}], // Data dari variable blade
+                data: [{{ $mhsCount }}, {{ $dosenCount }}], 
                 backgroundColor: ['#3B82F6', '#1E40AF'],
                 borderWidth: 0
             }]
@@ -174,5 +144,45 @@
             plugins: { legend: { display: false } }
         }
     });
+
+    // 2. Fungsi Mengambil Data Real-Time
+    function updateDashboard() {
+        fetch('{{ route("dashboard.realtime") }}')
+            .then(response => response.json())
+            .then(data => {
+                // Update Angka
+                document.getElementById('stat-today').innerText = data.todayCount;
+                document.getElementById('stat-yesterday').innerText = data.yesterdayCount;
+                document.getElementById('stat-week').innerText = data.weekCount;
+                document.getElementById('stat-month').innerText = data.monthCount;
+                
+                // Update Persentase
+                let percentEl = document.getElementById('stat-percent');
+                let chartPercentEl = document.getElementById('stat-percent-chart');
+                let symbol = data.percentage >= 0 ? '+' : '';
+                
+                percentEl.innerText = symbol + ' ' + data.percentage + ' %';
+                percentEl.className = data.percentage >= 0 ? 'text-green-500 text-xs font-bold mt-1' : 'text-red-500 text-xs font-bold mt-1';
+                
+                chartPercentEl.innerText = symbol + data.percentage + ' %';
+                chartPercentEl.className = data.percentage >= 0 ? 'text-green-600 font-bold text-sm ml-2' : 'text-red-600 font-bold text-sm ml-2';
+
+                // Update Tabel
+                document.getElementById('table-latest-visits').innerHTML = data.latestHtml;
+
+                // Update Grafik Garis (Line Chart)
+                myLineChart.data.labels = data.chartLabels;
+                myLineChart.data.datasets[0].data = data.chartVisits;
+                myLineChart.update();
+
+                // Update Grafik Lingkaran (Donut Chart)
+                myDonutChart.data.datasets[0].data = [data.mhsCount, data.dosenCount];
+                myDonutChart.update();
+            })
+            .catch(error => console.error('Gagal memperbarui data:', error));
+    }
+
+    // 3. Jalankan fungsi otomatis setiap 3 detik
+    setInterval(updateDashboard, 3000);
 </script>
 @endsection
