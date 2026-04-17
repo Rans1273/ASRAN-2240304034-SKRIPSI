@@ -3,58 +3,47 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Member; //
-use App\Models\VisitLog; //
+use App\Models\Member;
+use App\Models\VisitLog;
 use Carbon\Carbon;
-use Kreait\Firebase\Contract\Database; //
+use Kreait\Firebase\Contract\Database;
+use Google\Cloud\Firestore\FirestoreClient;
 
 class FirebaseGateListener extends Command
 {
-    /**
-     * Nama dan signature dari console command.
-     * Jalankan dengan: php artisan gate:firebase-listen
-     */
     protected $signature = 'gate:firebase-listen';
-
-    /**
-     * Deskripsi console command.
-     */
     protected $description = 'Memantau Firebase Realtime Database untuk aksi Smart Gate dan mencatat kunjungan';
 
     protected $database;
+    protected $firestore;
 
-    /**
-     * Membuat instance command baru.
-     */
     public function __construct(Database $database)
     {
         parent::__construct();
         $this->database = $database;
+
+        $this->firestore = new FirestoreClient([
+            'projectId' => env('FIREBASE_PROJECT_ID'),
+        ]);
     }
 
-    /**
-     * Mengeksekusi console command.
-     */
     public function handle()
     {
         $this->info("✅ Menghubungkan ke Firebase. Menunggu kartu ditap...");
 
         try {
-            // Referensi ke path 'gate_system' di Firebase Realtime Database
             $reference = $this->database->getReference('gate_system');
         } catch (\Exception $e) {
             $this->error("Gagal terhubung ke Firebase: " . $e->getMessage());
             return self::FAILURE;
         }
 
-        // Loop terus-menerus untuk mendengarkan perubahan data di Firebase
         while (true) {
             try {
                 $snapshot = $reference->getValue();
                 $lastUid = $snapshot['last_uid'] ?? null;
                 $command = $snapshot['command'] ?? 'done';
 
-                // Jika ESP32 mengirim status 'waiting', proses logika gate
                 if ($command === 'waiting' && !empty($lastUid)) {
                     $this->processGate($reference, $lastUid);
                 }
@@ -62,25 +51,21 @@ class FirebaseGateListener extends Command
                 $this->error("Error saat memantau Firebase: " . $e->getMessage());
             }
 
-            // Jeda 1 detik agar tidak membebani server
             sleep(1);
         }
     }
 
-    /**
-     * Logika utama pemrosesan gate dan database MySQL
-     */
     private function processGate($reference, $uid)
     {
         $uidBersih = strtoupper(trim($uid));
         $this->info("------------------------------------------------");
-        $this->info("RFID Terdeteksi: $uidBersih");
+        $this->info("RFID Terdeteksi (UID hanya untuk pencarian): $uidBersih");
         
-        // 1. Cari member di database MySQL berdasarkan UID
+        // 🔹 UID hanya untuk cari member
         $member = Member::where('uid', $uidBersih)->first();
 
         if ($member) {
-            // Cek apakah member dalam status aktif
+
             if ($member->status !== 'aktif') {
                 $this->error("Akses Ditolak: Member " . $member->nama . " tidak aktif.");
                 $reference->update([
@@ -90,34 +75,61 @@ class FirebaseGateListener extends Command
                 return;
             }
 
-            $this->info("Member Ditemukan: " . $member->nama);
+            // 🔥 WAJIB: ambil npm_nip dari database
+            $npm_nip = $member->npm_nip;
 
-            // 2. Logika pencatatan VisitLog (Tap Masuk vs Tap Keluar)
-            // Cari data kunjungan terakhir member yang belum mencatat waktu keluar
+            // ❌ Jika kosong → STOP (tidak boleh pakai UID)
+            if (empty($npm_nip)) {
+                $this->error("Data npm_nip kosong! Tidak dikirim ke Firestore.");
+                return;
+            }
+
+            $this->info("Member: {$member->nama} | NPM/NIP: {$npm_nip}");
+
+            // 🔹 Cek log terakhir
             $lastLog = VisitLog::where('member_id', $member->id)
                 ->whereNull('waktu_keluar')
                 ->latest('waktu_masuk')
                 ->first();
 
             if ($lastLog) {
-                // --- LOGIKA TAP KELUAR ---
-                // Jika ada log masuk yang belum keluar, update waktu_keluar
+
+                // =========================
+                // 🔴 TAP KELUAR
+                // =========================
                 $lastLog->update([
                     'waktu_keluar' => Carbon::now()
                 ]);
-                $this->info("Aksi: TAP KELUAR dicatat untuk " . $member->nama);
+
+                $this->info("Aksi: TAP KELUAR");
+
+                // 🔥 HAPUS dari Firestore (pakai npm_nip)
+                $this->firestore->collection('pengunjung')
+                    ->document($npm_nip)
+                    ->delete();
+
             } else {
-                // --- LOGIKA TAP MASUK ---
-                // Jika tidak ada log yang menggantung, buat data kunjungan baru
+
+                // =========================
+                // 🟢 TAP MASUK
+                // =========================
                 VisitLog::create([
                     'member_id'   => $member->id,
                     'waktu_masuk' => Carbon::now(),
                     'waktu_keluar'=> null,
                 ]);
-                $this->info("Aksi: TAP MASUK dicatat untuk " . $member->nama);
+
+                $this->info("Aksi: TAP MASUK");
+
+                // 🔥 SIMPAN ke Firestore (HANYA npm_nip)
+                $this->firestore->collection('pengunjung')
+                    ->document($npm_nip)
+                    ->set([
+                        'npm_nip' => $npm_nip
+                    ]);
             }
 
-            // 3. Kirim perintah balik ke Firebase untuk aksi alat (Buka Gate/Indikator)
+            // 🔹 Respon ke ESP32 (tetap)
             $reference->update([
                 'command' => 'open',
                 'last_name' => $member->nama,
@@ -125,13 +137,14 @@ class FirebaseGateListener extends Command
             ]);
 
         } else {
-            // Member tidak terdaftar di MySQL
-            $this->error("Akses Ditolak: UID " . $uidBersih . " tidak terdaftar.");
+
+            $this->error("Akses Ditolak: UID tidak terdaftar.");
             $reference->update([
                 'command' => 'reject',
                 'status_msg' => 'Kartu Tidak Terdaftar'
             ]);
         }
+
         $this->info("------------------------------------------------");
     }
 }
