@@ -12,30 +12,49 @@ class FirestoreService
     {
         $this->db = new FirestoreClient([
             'projectId' => env('FIREBASE_PROJECT_ID'),
+            'keyFilePath' => storage_path('app/firebase_credentials.json'),
         ]);
     }
 
-    public function exists($id)
+    /**
+     * CEK apakah pengunjung masih aktif di perpustakaan
+     */
+    public function exists($npm_nip)
     {
-        $doc = $this->db->collection('pengunjung')->document($id)->snapshot();
+        $doc = $this->db
+            ->collection('pengunjung')
+            ->document($npm_nip)
+            ->snapshot();
+
         return $doc->exists();
     }
 
-    public function masuk($id)
+    /**
+     * PENGUNJUNG MASUK
+     */
+    public function masuk($member)
     {
-        $this->db->collection('pengunjung')
-            ->document($id)
+        $npm_nip = $member->npm_nip;
+
+        $this->db
+            ->collection('pengunjung')
+            ->document($npm_nip)
             ->set([
-                'id' => $id,
-                'status' => 'masuk',
-                'waktu_masuk' => now()->toDateTimeString()
+                'npm_nip'      => $npm_nip,
+                'nama'         => $member->nama ?? null,
+                'status'       => 'masuk',
+                'waktu_masuk'  => now()->toDateTimeString(),
             ]);
     }
 
-    public function keluar($id)
+    /**
+     * PENGUNJUNG KELUAR
+     */
+    public function keluar($npm_nip)
     {
-        $this->db->collection('pengunjung')
-            ->document($id)
+        $this->db
+            ->collection('pengunjung')
+            ->document($npm_nip)
             ->delete();
     }
 }
