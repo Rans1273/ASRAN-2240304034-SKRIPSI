@@ -57,7 +57,7 @@ class MemberController extends Controller
             ]);
 
     } catch (\Exception $e) {
-        // ❗ Tidak mengganggu sistem utama
+        // Tidak mengganggu sistem utama
         // bisa aktifkan ini kalau debugging:
         // dd($e->getMessage());
     }
@@ -103,6 +103,6 @@ class MemberController extends Controller
         $member->delete();
 
         return redirect()->route('members.index')
-                         ->with('success', 'Data member berhasil dihapus!');
+                        ->with('success', 'Data member berhasil dihapus!');
     }
 }

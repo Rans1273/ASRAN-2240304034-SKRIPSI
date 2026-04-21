@@ -29,7 +29,7 @@ class FirebaseGateListener extends Command
 
     public function handle()
     {
-        $this->info("✅ Menghubungkan ke Firebase. Menunggu kartu ditap...");
+        $this->info("Menghubungkan ke Firebase. Menunggu kartu ditap...");
 
         try {
             $reference = $this->database->getReference('gate_system');
@@ -61,7 +61,7 @@ class FirebaseGateListener extends Command
         $this->info("------------------------------------------------");
         $this->info("RFID Terdeteksi (UID hanya untuk pencarian): $uidBersih");
         
-        // 🔹 UID hanya untuk cari member
+        // UID hanya untuk cari member
         $member = Member::where('uid', $uidBersih)->first();
 
         if ($member) {
@@ -75,10 +75,10 @@ class FirebaseGateListener extends Command
                 return;
             }
 
-            // 🔥 WAJIB: ambil npm_nip dari database
+            // WAJIB: ambil npm_nip dari database
             $npm_nip = $member->npm_nip;
 
-            // ❌ Jika kosong → STOP (tidak boleh pakai UID)
+            // Jika kosong → STOP (tidak boleh pakai UID)
             if (empty($npm_nip)) {
                 $this->error("Data npm_nip kosong! Tidak dikirim ke Firestore.");
                 return;
@@ -86,7 +86,7 @@ class FirebaseGateListener extends Command
 
             $this->info("Member: {$member->nama} | NPM/NIP: {$npm_nip}");
 
-            // 🔹 Cek log terakhir
+            // Cek log terakhir
             $lastLog = VisitLog::where('member_id', $member->id)
                 ->whereNull('waktu_keluar')
                 ->latest('waktu_masuk')
@@ -95,7 +95,7 @@ class FirebaseGateListener extends Command
             if ($lastLog) {
 
                 // =========================
-                // 🔴 TAP KELUAR
+                // TAP KELUAR
                 // =========================
                 $lastLog->update([
                     'waktu_keluar' => Carbon::now()
@@ -103,7 +103,7 @@ class FirebaseGateListener extends Command
 
                 $this->info("Aksi: TAP KELUAR");
 
-                // 🔥 HAPUS dari Firestore (pakai npm_nip)
+                // HAPUS dari Firestore (pakai npm_nip)
                 $this->firestore->collection('pengunjung')
                     ->document($npm_nip)
                     ->delete();
@@ -111,7 +111,7 @@ class FirebaseGateListener extends Command
             } else {
 
                 // =========================
-                // 🟢 TAP MASUK
+                // TAP MASUK
                 // =========================
                 VisitLog::create([
                     'member_id'   => $member->id,
@@ -121,7 +121,7 @@ class FirebaseGateListener extends Command
 
                 $this->info("Aksi: TAP MASUK");
 
-                // 🔥 SIMPAN ke Firestore (HANYA npm_nip)
+                // SIMPAN ke Firestore (HANYA npm_nip)
                 $this->firestore->collection('pengunjung')
                     ->document($npm_nip)
                     ->set([
@@ -129,7 +129,7 @@ class FirebaseGateListener extends Command
                     ]);
             }
 
-            // 🔹 Respon ke ESP32 (tetap)
+            // Respon ke ESP32 (tetap)
             $reference->update([
                 'command' => 'open',
                 'last_name' => $member->nama,

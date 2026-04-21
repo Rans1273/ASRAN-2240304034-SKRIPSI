@@ -15,10 +15,10 @@ class PengunjungController extends Controller
 
     public function scan($id)
     {
-        // 🔥 cek apakah sudah ada di Firestore
+        // cek apakah sudah ada di Firestore
         if ($this->firestore->exists($id)) {
 
-            // 👉 KELUAR
+            // KELUAR
             $this->firestore->keluar($id);
 
             return response()->json([
@@ -27,7 +27,7 @@ class PengunjungController extends Controller
             ]);
         } else {
 
-            // 👉 MASUK
+            // MASUK
             $this->firestore->masuk($id);
 
             return response()->json([
