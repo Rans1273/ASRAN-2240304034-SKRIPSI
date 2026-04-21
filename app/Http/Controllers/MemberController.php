@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Member;
 use Illuminate\Http\Request;
+use Google\Cloud\Firestore\FirestoreClient;
+use Illuminate\Support\Facades\Log;
 
 class MemberController extends Controller
 {
@@ -20,22 +22,49 @@ class MemberController extends Controller
     }
 
     public function store(Request $request)
-    {
-        $validatedData = $request->validate([
-            'uid'      => 'required|string|unique:members,uid',
-            'nama'     => 'required|string|max:255',
-            'npm_nip'  => 'required|string|unique:members,npm_nip',
-            'kategori' => 'required|string',
-            'jurusan'  => 'nullable|string|max:255', 
-            'fakultas' => 'nullable|string|max:255',
-            'status'   => 'required|string',
+{
+    $validatedData = $request->validate([
+        'uid'      => 'required|string|unique:members,uid',
+        'nama'     => 'required|string|max:255',
+        'npm_nip'  => 'required|string|unique:members,npm_nip',
+        'kategori' => 'required|string',
+        'jurusan'  => 'nullable|string|max:255', 
+        'fakultas' => 'nullable|string|max:255',
+        'status'   => 'required|string',
+    ]);
+
+    // 1. SIMPAN KE DATABASE LARAVEL (AMAN & TETAP JALAN)
+    $member = Member::create($validatedData);
+
+    // 2. SIMPAN KE FIRESTORE (TIDAK MENGGANGGU SISTEM)
+    try {
+        $firestore = new FirestoreClient([
+            'projectId' => env('FIREBASE_PROJECT_ID'),
+            'keyFilePath' => storage_path('app/firebase/firebase.json'),
         ]);
 
-        Member::create($validatedData);
+        $firestore->collection('members')
+            ->document((string) $member->id)
+            ->set([
+                'uid'        => $member->uid,
+                'nama'       => $member->nama,
+                'npm_nip'    => $member->npm_nip,
+                'kategori'   => $member->kategori,
+                'jurusan'    => $member->jurusan,
+                'fakultas'   => $member->fakultas,
+                'status'     => $member->status,
+                'created_at' => now()->toDateTimeString(),
+            ]);
 
-        return redirect()->route('members.index')
-                         ->with('success', 'Data member berhasil ditambahkan!');
+    } catch (\Exception $e) {
+        // ❗ Tidak mengganggu sistem utama
+        // bisa aktifkan ini kalau debugging:
+        // dd($e->getMessage());
     }
+
+    return redirect()->route('members.index')
+        ->with('success', 'Data member berhasil ditambahkan!');
+}
 
     public function edit(Member $member)
     {
