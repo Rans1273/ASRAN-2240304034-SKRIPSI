@@ -16,14 +16,3 @@ Route::get('/logs/export/pdf', [DashboardController::class, 'exportPdf'])->name(
 Route::get('/dashboard/realtime', [DashboardController::class, 'realtime'])->name('dashboard.realtime');
 
 Route::get('/scan/{id}', [PengunjungController::class, 'scan']);
-
-
-Route::get('/test-firebase', function () {
-    $db = app('firebase.database');
-
-    $db->getReference('test')->set([
-        'status' => 'ok'
-    ]);
-
-    return 'OK';
-});
